@@ -7,46 +7,64 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var tasks: [String] = []
-    @State private var newTask: String = ""
+    @State private var balance: Double = 0.0
+    @State private var amount: String = ""   // user input
 
     var body: some View {
         NavigationView {
-            VStack {
-                // Input field + button
-                HStack {
-                    TextField("Enter new task", text: $newTask)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .padding(.horizontal)
+            VStack(spacing: 20) {
+                // Display current balance
+                Text("Balance: $\(balance, specifier: "%.2f")")
+                    .font(.largeTitle)
+                    .bold()
+                    .padding()
 
-                    Button(action: {
-                        if !newTask.isEmpty {
-                            tasks.append(newTask)
-                            newTask = "" // clear input
-                        }
-                    }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title)
-                            .foregroundColor(.blue)
+                // Input field
+                TextField("Enter amount", text: $amount)
+                    .keyboardType(.decimalPad)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
+
+                // Buttons
+                HStack(spacing: 40) {
+                    Button(action: addFunds) {
+                        Label("Add", systemImage: "plus.circle.fill")
+                            .font(.title2)
+                            .padding()
+                            .background(Color.green.opacity(0.8))
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
                     }
-                    .padding(.trailing)
+
+                    Button(action: removeFunds) {
+                        Label("Remove", systemImage: "minus.circle.fill")
+                            .font(.title2)
+                            .padding()
+                            .background(Color.red.opacity(0.8))
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                    }
                 }
 
-                // Task list
-                List {
-                    ForEach(tasks, id: \.self) { task in
-                        Text(task)
-                    }
-                    .onDelete(perform: deleteTask)
-                }
+                Spacer()
             }
-            .navigationTitle("My To-Do List")
+            .navigationTitle("CoinTrack")
         }
     }
 
-    // Function to delete tasks
-    func deleteTask(at offsets: IndexSet) {
-        tasks.remove(atOffsets: offsets)
+    // MARK: - Functions
+    func addFunds() {
+        if let value = Double(amount) {
+            balance += value
+            amount = ""
+        }
+    }
+
+    func removeFunds() {
+        if let value = Double(amount) {
+            balance -= value
+            amount = ""
+        }
     }
 }
 
