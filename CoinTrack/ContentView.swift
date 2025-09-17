@@ -1,4 +1,19 @@
+//
+//  ContentView.swift
+//  CoinTrack
+//
+//  Created by Brady Cai on 9/15/25.
+//
+
 import SwiftUI
+
+// MARK: - Transaction model
+struct Transaction: Identifiable {
+    let id = UUID()
+    let description: String
+    let amount: Double
+    let date: Date
+}
 
 struct ContentView: View {
     @State private var balance: Double = 0.0
@@ -6,29 +21,30 @@ struct ContentView: View {
     @State private var leisure: Double = 0.0
     @State private var savings: Double = 0.0
 
-    // Editable category names
-    @State private var cat1Name = "Food"
-    @State private var cat2Name = "Leisure"
-    @State private var cat3Name = "Savings"
+    @State private var amount: String = ""
 
-    @State private var amount: String = ""   // user input
+    @State private var foodInput: String = ""
+    @State private var leisureInput: String = ""
+    @State private var savingsInput: String = ""
+
+    // MARK: - History log
+    @State private var history: [Transaction] = []
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 25) {
+            VStack(spacing: 20) {
                 // MAIN BALANCE
                 Text("Total Balance: $\(balance, specifier: "%.2f")")
-                    .font(.largeTitle)
-                    .bold()
+                    .font(.largeTitle).bold()
                     .padding(.top)
 
-                // Input field
+                // Balance input
                 TextField("Enter amount", text: $amount)
                     .keyboardType(.decimalPad)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal)
 
-                // Add / Remove buttons (equal widths)
+                // Add / Remove main balance
                 HStack(spacing: 16) {
                     Button(action: addFunds) {
                         Label("Add", systemImage: "plus.circle.fill")
@@ -51,12 +67,50 @@ struct ContentView: View {
 
                 Divider().padding(.vertical, 10)
 
-                // Subcategories (editable names)
+                // Subcategories
                 VStack(spacing: 15) {
-                    categoryRow(name: $cat1Name, amount: food, action: addToFood)
-                    categoryRow(name: $cat2Name, amount: leisure, action: addToLeisure)
-                    categoryRow(name: $cat3Name, amount: savings, action: addToSavings)
+                    categoryRow(
+                        title: "Food",
+                        total: food,
+                        input: $foodInput,
+                        onAdd: { moveFunds(from: &balance, to: &food, using: &foodInput, desc: "to Food") },
+                        onRemove: { moveFunds(from: &food, to: &balance, using: &foodInput, desc: "from Food") }
+                    )
+                    categoryRow(
+                        title: "Leisure",
+                        total: leisure,
+                        input: $leisureInput,
+                        onAdd: { moveFunds(from: &balance, to: &leisure, using: &leisureInput, desc: "to Leisure") },
+                        onRemove: { moveFunds(from: &leisure, to: &balance, using: &leisureInput, desc: "from Leisure") }
+                    )
+                    categoryRow(
+                        title: "Savings",
+                        total: savings,
+                        input: $savingsInput,
+                        onAdd: { moveFunds(from: &balance, to: &savings, using: &savingsInput, desc: "to Savings") },
+                        onRemove: { moveFunds(from: &savings, to: &balance, using: &savingsInput, desc: "from Savings") }
+                    )
                 }
+                .padding(.horizontal)
+
+                Divider().padding(.vertical, 10)
+
+                // MARK: - History Log
+                Text("History")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+
+                List(history.reversed()) { tx in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(tx.description) $\(tx.amount, specifier: "%.2f")")
+                            .font(.body)
+                        Text(tx.date, style: .time)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(height: 200) // scrollable log
 
                 Spacer()
             }
@@ -64,60 +118,89 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Functions
+    // MARK: - Balance funcs
     func addFunds() {
         if let value = Double(amount.trimmingCharacters(in: .whitespacesAndNewlines)), value > 0 {
             balance += value
+            history.append(Transaction(description: "Added to Balance", amount: value, date: Date()))
             amount = ""
         }
     }
 
     func removeFunds() {
         if let value = Double(amount.trimmingCharacters(in: .whitespacesAndNewlines)), value > 0 {
-            balance = max(0, balance - value)
-            amount = ""
-        }
-    }
-
-    func addToFood()    { moveFunds(to: &food) }
-    func addToLeisure() { moveFunds(to: &leisure) }
-    func addToSavings() { moveFunds(to: &savings) }
-
-    private func moveFunds(to category: inout Double) {
-        if let value = Double(amount.trimmingCharacters(in: .whitespacesAndNewlines)),
-           value > 0, balance >= value {
-            balance -= value
-            category += value
-            amount = ""
-        }
-    }
-
-    // MARK: - UI Helper
-    func categoryRow(name: Binding<String>, amount: Double, action: @escaping () -> Void) -> some View {
-        HStack(spacing: 12) {
-            TextField("Category", text: name)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-
-            Spacer()
-
-            Text("$\(amount, specifier: "%.2f")")
-                .font(.headline)
-                .frame(minWidth: 90, alignment: .trailing)
-
-            Button("Move") {
-                action()
+            if balance >= value {
+                balance -= value
+                history.append(Transaction(description: "Removed from Balance", amount: value, date: Date()))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color.blue.opacity(0.8))
-            .foregroundColor(.white)
-            .cornerRadius(8)
+            // else: not enough funds, maybe ignore or log an error
+            amount = ""
         }
-        .padding(.horizontal)
+    }
+
+    // MARK: - Move funds
+    private func moveFunds(from source: inout Double, to target: inout Double, using input: inout String, desc: String) {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Double(trimmed), value > 0 else { return }
+        guard source >= value else { return }
+        source -= value
+        target += value
+        history.append(Transaction(description: "Moved \(desc)", amount: value, date: Date()))
+        input = ""
+    }
+
+    // MARK: - UI Helper (aligned columns)
+    private let labelWidth: CGFloat  = 80
+    private let totalWidth: CGFloat  = 80
+    private let inputWidth: CGFloat  = 90
+    private let buttonSize: CGFloat  = 36
+
+    func categoryRow(
+        title: String,
+        total: Double,
+        input: Binding<String>,
+        onAdd: @escaping () -> Void,
+        onRemove: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 12) {
+            Text("\(title):")
+                .frame(width: labelWidth, alignment: .leading)
+
+            Text("$\(total, specifier: "%.2f")")
+                .font(.headline)
+                .frame(width: totalWidth, alignment: .trailing)
+
+            TextField("Amount", text: input)
+                .keyboardType(.decimalPad)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .frame(width: inputWidth, height: buttonSize)
+
+            Button {
+                onAdd()
+            } label: {
+                Image(systemName: "plus")
+                    .font(.headline)
+                    .frame(width: buttonSize, height: buttonSize)
+                    .background(Color.green.opacity(0.85))
+                    .foregroundColor(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            Button {
+                onRemove()
+            } label: {
+                Image(systemName: "minus")
+                    .font(.headline)
+                    .frame(width: buttonSize, height: buttonSize)
+                    .background(Color.red.opacity(0.85))
+                    .foregroundColor(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
     }
 }
 
-// Preview
+// MARK: - Preview
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
