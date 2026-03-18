@@ -1,18 +1,58 @@
 import SwiftUI
+import SwiftData
 
 struct HomeView: View {
     @Binding var selected: SideMenuOption
     @EnvironmentObject var data: AppData
+    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
 
     private var recentTransactions: [Transaction] {
-        Array(data.transactions.sorted { $0.date > $1.date }.prefix(3))
+        Array(transactions.prefix(3))
+    }
+
+    private var totalIncome: Double {
+        transactions
+            .filter { $0.type == .income }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    private var totalExpenses: Double {
+        transactions
+            .filter { $0.type == .expense }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    private var balance: Double {
+        totalIncome - totalExpenses
+    }
+
+    private var thisMonthTransactions: [Transaction] {
+        let calendar = Calendar.current
+        let now = Date()
+
+        return transactions.filter { transaction in
+            calendar.isDate(transaction.date, equalTo: now, toGranularity: .month) &&
+            calendar.isDate(transaction.date, equalTo: now, toGranularity: .year)
+        }
+    }
+
+    private var thisMonthIncome: Double {
+        thisMonthTransactions
+            .filter { $0.type == .income }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    private var thisMonthExpenses: Double {
+        thisMonthTransactions
+            .filter { $0.type == .expense }
+            .reduce(0) { $0 + $1.amount }
     }
 
     private var budgetUsageText: String {
-        if data.thisMonthExpenses == 0 {
+        if thisMonthExpenses == 0 {
             return "No spending recorded this month yet."
         } else {
-            return "You've spent \(data.thisMonthExpenses.asCurrency) so far this month."
+            return "You've spent \(thisMonthExpenses.asCurrency) so far this month."
         }
     }
 
@@ -20,7 +60,6 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
 
-                // MARK: - Welcome
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Overview")
                         .font(.caption)
@@ -39,13 +78,12 @@ struct HomeView: View {
                         .foregroundColor(.secondary)
                 }
 
-                // MARK: - Balance Card
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Current Balance")
                         .font(.subheadline)
                         .foregroundColor(.white.opacity(0.85))
 
-                    Text(data.balance.asCurrency)
+                    Text(balance.asCurrency)
                         .font(.system(size: 34, weight: .bold))
                         .foregroundColor(.white)
 
@@ -64,24 +102,22 @@ struct HomeView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
 
-                // MARK: - Quick Stats
                 HStack(spacing: 12) {
                     HomeStatCard(
                         title: "Income",
-                        value: data.thisMonthIncome.asCurrency,
+                        value: thisMonthIncome.asCurrency,
                         icon: "arrow.down.circle.fill",
                         tint: .green
                     )
 
                     HomeStatCard(
                         title: "Expenses",
-                        value: data.thisMonthExpenses.asCurrency,
+                        value: thisMonthExpenses.asCurrency,
                         icon: "arrow.up.circle.fill",
                         tint: .red
                     )
                 }
 
-                // MARK: - Quick Actions
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Quick Actions")
                         .font(.title3)
@@ -126,7 +162,6 @@ struct HomeView: View {
                     }
                 }
 
-                // MARK: - Monthly Budget Preview
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Budget Preview")
                         .font(.title3)
@@ -138,7 +173,7 @@ struct HomeView: View {
                     } else {
                         VStack(spacing: 12) {
                             ForEach(data.categories.prefix(3)) { category in
-                                HomeBudgetPreviewRow(category: category)
+                                HomeBudgetPreviewRow(category: category, transactions: transactions)
                             }
                         }
                     }
@@ -147,7 +182,6 @@ struct HomeView: View {
                 .background(Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-                // MARK: - Recent Transactions
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
                         Text("Recent Transactions")
@@ -257,19 +291,30 @@ struct HomeActionCard: View {
 }
 
 struct HomeBudgetPreviewRow: View {
-    @EnvironmentObject var data: AppData
     let category: BudgetCategory
+    let transactions: [Transaction]
 
     private var spent: Double {
-        data.spentAmount(for: category)
+        let calendar = Calendar.current
+        let now = Date()
+
+        return transactions
+            .filter {
+                $0.categoryId == category.id &&
+                $0.type == .expense &&
+                calendar.isDate($0.date, equalTo: now, toGranularity: .month) &&
+                calendar.isDate($0.date, equalTo: now, toGranularity: .year)
+            }
+            .reduce(0) { $0 + $1.amount }
     }
 
     private var remaining: Double {
-        data.remainingBudget(for: category)
+        category.monthlyBudget - spent
     }
 
     private var progress: Double {
-        data.budgetProgress(for: category)
+        guard category.monthlyBudget > 0 else { return 0 }
+        return min(spent / category.monthlyBudget, 1.0)
     }
 
     private var tint: Color {

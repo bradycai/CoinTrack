@@ -1,8 +1,10 @@
 import SwiftUI
+import SwiftData
 
 struct AddTransactionView: View {
     @EnvironmentObject var data: AppData
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     @State private var title: String = ""
     @State private var amountText: String = ""
@@ -185,7 +187,7 @@ struct AddTransactionView: View {
             note: trimmedNote
         )
 
-        data.addTransaction(newTransaction)
+        modelContext.insert(newTransaction)
         dismiss()
     }
 }

@@ -1,15 +1,14 @@
 import SwiftUI
+import SwiftData
 
 struct HistoryView: View {
     @EnvironmentObject var data: AppData
-
-    private var sortedTransactions: [Transaction] {
-        data.transactions.sorted { $0.date > $1.date }
-    }
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
 
     var body: some View {
         Group {
-            if sortedTransactions.isEmpty {
+            if transactions.isEmpty {
                 ContentUnavailableView(
                     "No Transactions Yet",
                     systemImage: "list.bullet.rectangle",
@@ -17,7 +16,7 @@ struct HistoryView: View {
                 )
             } else {
                 List {
-                    ForEach(sortedTransactions) { transaction in
+                    ForEach(transactions) { transaction in
                         HistoryTransactionRow(transaction: transaction)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -33,9 +32,9 @@ struct HistoryView: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                if !sortedTransactions.isEmpty {
+                if !transactions.isEmpty {
                     Button("Clear") {
-                        data.transactions.removeAll()
+                        clearAllTransactions()
                     }
                     .foregroundColor(.red)
                 }
@@ -44,8 +43,15 @@ struct HistoryView: View {
     }
 
     private func delete(at offsets: IndexSet) {
-        let idsToDelete = offsets.map { sortedTransactions[$0].id }
-        data.transactions.removeAll { idsToDelete.contains($0.id) }
+        for index in offsets {
+            modelContext.delete(transactions[index])
+        }
+    }
+
+    private func clearAllTransactions() {
+        for transaction in transactions {
+            modelContext.delete(transaction)
+        }
     }
 }
 

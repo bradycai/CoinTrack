@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct CoinTrackApp: App {
@@ -9,5 +10,6 @@ struct CoinTrackApp: App {
             AppShellView()
                 .environmentObject(data)
         }
+        .modelContainer(for: Transaction.self)
     }
 }

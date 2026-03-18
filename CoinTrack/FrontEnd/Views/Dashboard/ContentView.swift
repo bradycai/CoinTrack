@@ -1,108 +1,161 @@
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
     @EnvironmentObject var data: AppData
+    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
+
+    @State private var showingAddTransaction = false
+
+    private var balance: Double {
+        totalIncome - totalExpenses
+    }
+
+    private var totalIncome: Double {
+        transactions
+            .filter { $0.type == .income }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    private var totalExpenses: Double {
+        transactions
+            .filter { $0.type == .expense }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    private var thisMonthTransactions: [Transaction] {
+        let calendar = Calendar.current
+        let now = Date()
+
+        return transactions.filter { transaction in
+            calendar.isDate(transaction.date, equalTo: now, toGranularity: .month) &&
+            calendar.isDate(transaction.date, equalTo: now, toGranularity: .year)
+        }
+    }
+
+    private var thisMonthIncome: Double {
+        thisMonthTransactions
+            .filter { $0.type == .income }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    private var thisMonthExpenses: Double {
+        thisMonthTransactions
+            .filter { $0.type == .expense }
+            .reduce(0) { $0 + $1.amount }
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
 
-                // MARK: - Header Card
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Total Balance")
-                        .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.85))
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Total Balance")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.85))
 
-                    Text(data.balance.asCurrency)
-                        .font(.system(size: 34, weight: .bold))
-                        .foregroundColor(.white)
+                        Text(balance.asCurrency)
+                            .font(.system(size: 34, weight: .bold))
+                            .foregroundColor(.white)
 
-                    Text("Track your income, expenses, and monthly budget progress.")
-                        .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.82))
+                        Text("Track your income, expenses, and monthly budget progress.")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.82))
+                    }
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.green, Color.teal],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("This Month")
+                            .font(.title3)
+                            .fontWeight(.bold)
+
+                        HStack(spacing: 12) {
+                            SummaryCard(
+                                title: "Income",
+                                value: thisMonthIncome.asCurrency,
+                                icon: "arrow.down.circle.fill",
+                                tint: .green
+                            )
+
+                            SummaryCard(
+                                title: "Expenses",
+                                value: thisMonthExpenses.asCurrency,
+                                icon: "arrow.up.circle.fill",
+                                tint: .red
+                            )
+                        }
+                    }
+                    .padding(18)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Budget Categories")
+                            .font(.title3)
+                            .fontWeight(.bold)
+
+                        if data.categories.isEmpty {
+                            Text("No categories yet.")
+                                .foregroundColor(.secondary)
+                        } else {
+                            VStack(spacing: 14) {
+                                ForEach(data.categories) { category in
+                                    BudgetCategoryCard(category: category, transactions: transactions)
+                                }
+                            }
+                        }
+                    }
+                    .padding(18)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Recent Transactions")
+                            .font(.title3)
+                            .fontWeight(.bold)
+
+                        if transactions.isEmpty {
+                            Text("No transactions yet.")
+                                .foregroundColor(.secondary)
+                        } else {
+                            VStack(spacing: 12) {
+                                ForEach(transactions.prefix(5)) { transaction in
+                                    TransactionRow(transaction: transaction)
+                                }
+                            }
+                        }
+                    }
+                    .padding(18)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 }
                 .padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    LinearGradient(
-                        colors: [Color.green, Color.teal],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-
-                // MARK: - This Month Summary
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("This Month")
-                        .font(.title3)
-                        .fontWeight(.bold)
-
-                    HStack(spacing: 12) {
-                        SummaryCard(
-                            title: "Income",
-                            value: data.thisMonthIncome.asCurrency,
-                            icon: "arrow.down.circle.fill",
-                            tint: .green
-                        )
-
-                        SummaryCard(
-                            title: "Expenses",
-                            value: data.thisMonthExpenses.asCurrency,
-                            icon: "arrow.up.circle.fill",
-                            tint: .red
-                        )
-                    }
-                }
-                .padding(18)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-
-                // MARK: - Budget Categories
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Budget Categories")
-                        .font(.title3)
-                        .fontWeight(.bold)
-
-                    if data.categories.isEmpty {
-                        Text("No categories yet.")
-                            .foregroundColor(.secondary)
-                    } else {
-                        VStack(spacing: 14) {
-                            ForEach(data.categories) { category in
-                                BudgetCategoryCard(category: category)
-                            }
-                        }
-                    }
-                }
-                .padding(18)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-
-                // MARK: - Recent Transactions
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Recent Transactions")
-                        .font(.title3)
-                        .fontWeight(.bold)
-
-                    if data.transactions.isEmpty {
-                        Text("No transactions yet.")
-                            .foregroundColor(.secondary)
-                    } else {
-                        VStack(spacing: 12) {
-                            ForEach(data.transactions.prefix(5)) { transaction in
-                                TransactionRow(transaction: transaction)
-                            }
-                        }
-                    }
-                }
-                .padding(18)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
-            .padding(20)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle("CoinTrack")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showingAddTransaction = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingAddTransaction) {
+                AddTransactionView()
+            }
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
     }
 }
 
@@ -138,19 +191,22 @@ struct SummaryCard: View {
 }
 
 struct BudgetCategoryCard: View {
-    @EnvironmentObject var data: AppData
     let category: BudgetCategory
+    let transactions: [Transaction]
 
     private var spent: Double {
-        data.spentAmount(for: category)
+        transactions
+            .filter { $0.categoryId == category.id && $0.type == .expense }
+            .reduce(0) { $0 + $1.amount }
     }
 
     private var remaining: Double {
-        data.remainingBudget(for: category)
+        category.monthlyBudget - spent
     }
 
     private var progress: Double {
-        data.budgetProgress(for: category)
+        guard category.monthlyBudget > 0 else { return 0 }
+        return min(spent / category.monthlyBudget, 1.0)
     }
 
     private var tint: Color {

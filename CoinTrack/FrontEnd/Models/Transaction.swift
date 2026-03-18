@@ -1,8 +1,10 @@
 import Foundation
+import SwiftData
 
-struct Transaction: Identifiable, Codable {
+@Model
+final class Transaction: Identifiable {
 
-    let id: UUID
+    var id: UUID
     var title: String
     var amount: Double
     var type: TransactionType

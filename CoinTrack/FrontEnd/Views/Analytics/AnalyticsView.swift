@@ -1,12 +1,45 @@
 import SwiftUI
+import SwiftData
 
 struct AnalyticsView: View {
     @EnvironmentObject var data: AppData
+    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
+
+    private var thisMonthTransactions: [Transaction] {
+        let calendar = Calendar.current
+        let now = Date()
+
+        return transactions.filter { transaction in
+            calendar.isDate(transaction.date, equalTo: now, toGranularity: .month) &&
+            calendar.isDate(transaction.date, equalTo: now, toGranularity: .year)
+        }
+    }
+
+    private var thisMonthIncome: Double {
+        thisMonthTransactions
+            .filter { $0.type == .income }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    private var thisMonthExpenses: Double {
+        thisMonthTransactions
+            .filter { $0.type == .expense }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    private func spentAmount(for category: BudgetCategory) -> Double {
+        thisMonthTransactions
+            .filter {
+                $0.categoryId == category.id &&
+                $0.type == .expense
+            }
+            .reduce(0) { $0 + $1.amount }
+    }
 
     private var topCategories: [(BudgetCategory, Double)] {
         data.categories
             .map { category in
-                (category, data.spentAmount(for: category))
+                (category, spentAmount(for: category))
             }
             .sorted { $0.1 > $1.1 }
     }
@@ -27,14 +60,14 @@ struct AnalyticsView: View {
                 HStack(spacing: 12) {
                     AnalyticsStatCard(
                         title: "Income",
-                        value: data.thisMonthIncome.asCurrency,
+                        value: thisMonthIncome.asCurrency,
                         tint: .green,
                         icon: "arrow.down.circle.fill"
                     )
 
                     AnalyticsStatCard(
                         title: "Expenses",
-                        value: data.thisMonthExpenses.asCurrency,
+                        value: thisMonthExpenses.asCurrency,
                         tint: .red,
                         icon: "arrow.up.circle.fill"
                     )
@@ -45,12 +78,12 @@ struct AnalyticsView: View {
                         .font(.title3)
                         .fontWeight(.bold)
 
-                    if topCategories.isEmpty {
+                    if topCategories.allSatisfy({ $0.1 == 0 }) {
                         Text("No spending data yet.")
                             .foregroundColor(.secondary)
                     } else {
                         VStack(spacing: 12) {
-                            ForEach(topCategories.prefix(5), id: \.0.id) { category, amount in
+                            ForEach(topCategories.filter { $0.1 > 0 }.prefix(5), id: \.0.id) { category, amount in
                                 HStack {
                                     HStack(spacing: 10) {
                                         ZStack {
